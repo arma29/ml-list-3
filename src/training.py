@@ -1,39 +1,48 @@
-import datetime
 import time
 from os.path import isfile
 
 import joblib
 import numpy as np
-from sklearn.model_selection import StratifiedKFold as KFold
+from sklearn.model_selection import train_test_split
 
-from src.lvq._lvq import LVQ
-from src.neighbors._classification import Knn
 from src.utils import get_project_models_dir
+from src.classifiers._kmeansbayes import KMeansBayes
 
 
-def create_dict(X, y, target_names, dataset_name):
+def create_dict(data_dict):
     parameters_dict = {
-        'k_lst': [1, 3],
-        'p_lst': range(10, 35, 5),
-        'measures_lst': ['LVQ1', 'LVQ2.1', 'LVQ3', 'None'],
+        'measures_lst': [0.3, 0.4, 0.5],
         'magic_number': 5,
         'elapsed_time': 0,
-        'X': X,
-        'y': y,
-        'target_names': target_names,
-        'dataset_name': dataset_name
+        'X_pos': data_dict['X_pos'],
+        'y_pos': data_dict['y_pos'],
+        'X_neg': data_dict['X_neg'],
+        'y_neg': data_dict['y_neg'],
+        'X_pos_n': data_dict['X_pos_n'],
+        'X_neg_n': data_dict['X_neg_n'],
+        'target_names': data_dict['target_names'],
+        'dataset_name': data_dict['dataset_name'],
+        'classifier': {
+            '0.3': {
+                'bests': [12, 2.5]
+            },
+            '0.4': {
+                'bests': [13, 2.1]
+            },
+            '0.5': {
+                'bests': [8, 1.2]
+            }
+        }
     }
+
+    if("cm1" in parameters_dict['dataset_name']):
+        parameters_dict['n_clusters_lst'] = [25, 26, 30]
+        parameters_dict['dist_th_lst'] = [1.1, 1.2]
+        parameters_dict['classifier']['0.3']['bests'] = [26, 1.1]
+        parameters_dict['classifier']['0.4']['bests'] = [25, 1.1]
+        parameters_dict['classifier']['0.5']['bests'] = [30, 1.2]
+
     return parameters_dict
-
-
-def print_elapsed_time(parameters_dict):
-    dataset_name = parameters_dict['dataset_name']
-    time_in_seconds = parameters_dict['elapsed_time']
-    delta = datetime.timedelta(seconds=time_in_seconds)
-    print(
-        f'{dataset_name} - Tempo do Experimento: {time_in_seconds} \n'
-        f'segundos - {delta} hh:mm:ss'
-    )
 
 
 def has_saved_model(dataset_name):
@@ -55,93 +64,61 @@ def save_model(parameters_dict, dataset_name):
     joblib.dump(value=parameters_dict, filename=filename)
 
 
-def train_model(X, y, target_names, dataset_name):
+def train_model(data_dict):
+    dataset_name = data_dict['dataset_name']
     if(has_saved_model(dataset_name)):
         return get_saved_model(dataset_name)
 
-    parameters_dict = create_dict(X, y, target_names, dataset_name)
-    magic_number = parameters_dict['magic_number']
+    parameters_dict = create_dict(data_dict)
+    target_names = parameters_dict['target_names']
 
     exp_time = time.time()
 
-    cv = KFold(n_splits=10, random_state=1, shuffle=True)
-
     for measure in parameters_dict['measures_lst']:
-        # print ('*'*10, dataset_name, '*'*10, '\n')
 
-        processing_time = []
-        acc = []
-        acc_std = []
+        X_pos = parameters_dict['X_pos']
+        y_pos = parameters_dict['y_pos']
+        X_neg = parameters_dict['X_neg']
+        y_neg = parameters_dict['y_neg']
+        X_pos_n = parameters_dict['X_pos_n']
+        X_neg_n = parameters_dict['X_neg_n']
 
-        processing_p_time = []
-        acc_p = []
-        acc_p_std = []
+        rd_state = 1
 
-        for k in parameters_dict['k_lst']:
+        X_neg_train, X_neg_test, y_neg_train, y_neg_test = \
+            train_test_split(X_neg, y_neg, train_size=measure,
+                             random_state=rd_state)
 
-            obj = Knn(n_neighbors=k)
+        X_test = np.concatenate((X_pos, X_neg_test))
+        y_test = np.concatenate((y_pos, y_neg_test))
 
-            if(k == parameters_dict['k_lst'][-1] and measure != 'None'):
+        X_neg_train_n, X_neg_test_n, y_neg_train, y_neg_test = \
+            train_test_split(X_neg_n, y_neg, train_size=measure,
+                             random_state=rd_state)
 
-                for p in parameters_dict['p_lst']:
-                    tmp_p_proc_time = []
-                    for x in range(magic_number):
-                        start_time = time.time()
-                        scores = custom_cross_val_score(
-                            obj, X, y, cv, measure, p)
-                        tmp_p_proc_time.append(time.time() - start_time)
+        X_test_n = np.concatenate((X_pos_n, X_neg_test_n))
 
-                    processing_p_time.append(np.mean(tmp_p_proc_time))
-                    acc_p.append(np.mean(scores))
-                    acc_p_std.append(np.std(scores))
+        parameters_dict['classifier'][str(measure)]['X_test'] = X_test
+        parameters_dict['classifier'][str(measure)]['X_test_n'] = X_test_n
+        parameters_dict['classifier'][str(measure)]['y_test'] = y_test
 
-                new_key = f'{measure}-p'
-                parameters_dict[new_key] = []
-                parameters_dict[new_key].extend(
-                    [processing_p_time, acc_p, acc_p_std])
+        kmeans_bayes = KMeansBayes(
+            neg_class=target_names[0],
+            pos_class=target_names[1],
+            n_clusters=parameters_dict['classifier'][str(measure)]['bests'][0],
+            dist_threshold=parameters_dict['classifier'][str(measure)]['bests'][1])
 
-            tmp_proc_time = []
-            for x in range(magic_number):  # 30 times for statistical relevance
-                # Train + Test
-                start_time = time.time()
-                scores = custom_cross_val_score(
-                    obj, X, y, cv, measure, parameters_dict['p_lst'][0])
-                tmp_proc_time.append(time.time() - start_time)
-
-            # Saving measurements
-            processing_time.append(np.mean(tmp_proc_time))
-            acc.append(np.mean(scores))
-            # print(f'Acc Cust: {acc[-1]} - k = {k}; measure = {measure}')
-            acc_std.append(np.std(scores))
-
-        new_key = f'{measure}-k'
-        parameters_dict[new_key] = []
-        parameters_dict[new_key].extend([processing_time, acc, acc_std])
-        # print(
-        #     f'Processing Time: {parameters_dict[measure][0]} \n'
-        #     f'- M Number: {magic_number}'
-        # )
-        # print(f'Acc: {parameters_dict[measure][1]}')
-        # print(f'Acc Std: {parameters_dict[measure][2]}')
+        parameters_dict['classifier'][str(
+            measure)]['X_neg_train'] = X_neg_train
+        parameters_dict['classifier'][str(
+            measure)]['X_neg_train_n'] = X_neg_train_n
+        parameters_dict['classifier'][str(
+            measure)]['y_neg_train'] = y_neg_train
+        parameters_dict['classifier'][str(measure)]['obj'] = kmeans_bayes.fit(
+            X_neg_train_n, y_neg_train, X_neg_train)
 
     parameters_dict['elapsed_time'] = time.time() - exp_time
 
     save_model(parameters_dict, dataset_name)
 
     return parameters_dict
-
-
-def custom_cross_val_score(estimator, X, y, cv, version, p_number):
-    scores = []
-
-    for train_index, test_index in cv.split(X, y):
-        X_train, X_test = X[train_index], X[test_index]
-        y_train, y_test = y[train_index], y[test_index]
-
-        pg = LVQ(prototypes_number=p_number, version=version)
-        s_set = pg.generate(X_train, y_train)
-
-        estimator.fit(s_set[0], s_set[1])
-        scores.append(estimator.score(X_test, y_test))
-
-    return scores

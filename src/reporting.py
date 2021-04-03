@@ -1,151 +1,17 @@
+
 import matplotlib.pyplot as plt
-from sklearn.metrics import plot_confusion_matrix
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 
 import src.plot_utils as pu
-from src.lvq._lvq import LVQ
-from src.neighbors._classification import Knn
+from src.classifiers._kmeansbayes import KMeansBayes
 from src.utils import get_project_results_dir
 
 
-def plot_hq_summary(parameters_dict):
-    k_lst = parameters_dict['k_lst']
-    measures_lst = parameters_dict['measures_lst']
-    dataset_name = parameters_dict['dataset_name']
-
-    fmt = ['ro--', 'g^--', 'bs--', 'k*--']
-
-    pu.figure_setup()
-
-    fig_size = pu.get_fig_size(15, 6)
-    fig = plt.figure(figsize=(fig_size))
-    fig.suptitle(f'Dataset: {dataset_name.upper()}')
-
-    ax = fig.add_subplot(1, 2, 1)
-
-    ax.set_xlabel('Parâmetro K')
-    ax.set_ylabel('Tempo de Processamento (s)')
-
-    ax.set_axisbelow(True)
-
-    for i in range(len(fmt)):
-        curr_measure = f'{measures_lst[i]}-k'
-        curr_name = measures_lst[i]
-        ax.plot(
-            k_lst,
-            parameters_dict[curr_measure][0],
-            fmt[i],
-            markersize=1.5,
-            linewidth=0.5,
-            label=curr_name)
-        ax.set_xticks(k_lst)
-
-    plt.legend()
-    plt.tight_layout()
-
-    ax = fig.add_subplot(1, 2, 2)
-
-    ax.set_xlabel('Parâmetro K')
-    ax.set_ylabel('Acurácia')
-
-    ax.set_axisbelow(True)
-
-    for i in range(len(fmt)):
-        curr_measure = f'{measures_lst[i]}-k'
-        curr_name = measures_lst[i]
-        ax.plot(
-            k_lst,
-            parameters_dict[curr_measure][1],
-            fmt[i],
-            markersize=1.5,
-            linewidth=0.5,
-            label=curr_name)
-        ax.set_xticks(k_lst)
-
-    plt.legend()
-    plt.tight_layout()
-
-    filename = get_project_results_dir().joinpath(dataset_name + '_summary.eps')
-
-    return fig, str(filename)
-
-
-def plot_hq_summary_p(parameters_dict):
-    p_lst = parameters_dict['p_lst']
-    measures_lst = parameters_dict['measures_lst']
-    dataset_name = parameters_dict['dataset_name']
-
-    fmt = ['ro--', 'g^--', 'bs--']
-
-    pu.figure_setup()
-
-    fig_size = pu.get_fig_size(15, 6)
-    fig = plt.figure(figsize=(fig_size))
-    fig.suptitle(f'Dataset: {dataset_name.upper()}')
-
-    ax = fig.add_subplot(1, 2, 1)
-
-    ax.set_xlabel('Protótipos')
-    ax.set_ylabel('Tempo de Processamento (s)')
-
-    ax.set_axisbelow(True)
-
-    for i in range(len(fmt)):
-        curr_measure = f'{measures_lst[i]}-p'
-        curr_name = measures_lst[i]
-        ax.plot(
-            p_lst,
-            parameters_dict[curr_measure][0],
-            fmt[i],
-            markersize=1.5,
-            linewidth=0.5,
-            label=curr_name)
-        ax.set_xticks(p_lst)
-
-    plt.legend()
-    plt.tight_layout()
-
-    ax = fig.add_subplot(1, 2, 2)
-
-    ax.set_xlabel('Protótipos')
-    ax.set_ylabel('Acurácia')
-
-    ax.set_axisbelow(True)
-
-    for i in range(len(fmt)):
-        curr_measure = f'{measures_lst[i]}-p'
-        curr_name = measures_lst[i]
-        ax.plot(
-            p_lst,
-            parameters_dict[curr_measure][1],
-            fmt[i],
-            markersize=1.5,
-            linewidth=0.5,
-            label=curr_name)
-        ax.set_xticks(p_lst)
-
-    plt.legend()
-    plt.tight_layout()
-
-    filename = get_project_results_dir().joinpath(dataset_name + '_summary_p.eps')
-
-    return fig, str(filename)
-
-
 def plot_hq_mtx(parameters_dict):
-    X = parameters_dict['X']
-    y = parameters_dict['y']
-
-    k_lst = parameters_dict['k_lst']
-    p_lst = parameters_dict['p_lst']
     measures_lst = parameters_dict['measures_lst']
     dataset_name = parameters_dict['dataset_name']
-    target_names = parameters_dict['target_names']
 
     pu.figure_setup()
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, random_state=1, shuffle=True, stratify=y)
 
     fig_size = pu.get_fig_size(15, 4.4)
     fig = plt.figure(figsize=(fig_size))
@@ -156,19 +22,23 @@ def plot_hq_mtx(parameters_dict):
         ax.set_axisbelow(True)
 
         curr_name = measures_lst[i]
+        title = f'{curr_name*100}\%'
 
-        pg = LVQ(prototypes_number=p_lst[0], version=curr_name)
-        s_set = pg.generate(X_train, y_train)
+        X_test = parameters_dict['classifier'][str(curr_name)]['X_test']
+        X_test_n = parameters_dict['classifier'][str(curr_name)]['X_test_n']
+        y_test = parameters_dict['classifier'][str(curr_name)]['y_test']
 
-        classifier = Knn(n_neighbors=k_lst[-1]).fit(s_set[0], s_set[1])
-        plot_confusion_matrix(classifier, X_test, y_test,
-                              display_labels=target_names,
-                              ax=ax,
-                              cmap=plt.cm.Blues,
-                              normalize=None
-                              )
+        classifier = parameters_dict['classifier'][str(curr_name)]['obj']
 
-        ax.set_title(curr_name)
+        cf_mtx = confusion_matrix(y_test, classifier.predict(X_test_n, X_test))
+        tn, fp, fn, tp = cf_mtx.ravel()
+        print(f'Title:{title} - TN:{tn} FP:{fp} FN:{fn} TP:{tp}\n')
+
+        disp = ConfusionMatrixDisplay(confusion_matrix=cf_mtx)
+
+        disp.plot(ax=ax, cmap=plt.cm.Blues)
+
+        ax.set_title(title)
 
     plt.tight_layout()
 
@@ -177,11 +47,76 @@ def plot_hq_mtx(parameters_dict):
     return fig, str(filename)
 
 
+def plot_massive(parameters_dict):
+    dataset_name = parameters_dict['dataset_name']
+    target_names = parameters_dict['target_names']
+    measures_lst = parameters_dict['measures_lst']
+
+    pu.figure_setup()
+
+    fig_size = pu.get_fig_size(15, 15)
+    fig = plt.figure(figsize=(fig_size))
+    fig.suptitle(f'Dataset: {dataset_name.upper()}')
+
+    ax = fig.add_subplot()
+    ax.set_axisbelow(True)
+    ax.set_ylim(0, 1)
+    ax.set_xlim(0, 1)
+    ax.plot([0, 1], [0, 1], 'r--')  # Plot bissectriz
+
+    for measure in measures_lst:
+        X_test = parameters_dict['classifier'][str(measure)]['X_test']
+        X_test_n = parameters_dict['classifier'][str(measure)]['X_test_n']
+        y_test = parameters_dict['classifier'][str(measure)]['y_test']
+
+        X_neg_train = parameters_dict['classifier'][str(
+            measure)]['X_neg_train']
+        X_neg_train_n = parameters_dict['classifier'][str(
+            measure)]['X_neg_train_n']
+        y_neg_train = parameters_dict['classifier'][str(
+            measure)]['y_neg_train']
+
+        n_clusters = parameters_dict['classifier'][str(measure)]['bests'][0]
+        dist_threshold = parameters_dict['classifier'][str(
+            measure)]['bests'][1]
+
+        classifier = KMeansBayes(
+            neg_class=target_names[0],
+            pos_class=target_names[1],
+            n_clusters=n_clusters,
+            dist_threshold=dist_threshold
+        ).fit(X_neg_train_n, y_neg_train, X_neg_train)
+
+        tn, fp, fn, tp = confusion_matrix(
+            y_test, classifier.predict(X_test_n, X_test)).ravel()
+
+        tp_rate = tp/(tp+fn)
+        fp_rate = fp/(fp+tn)
+
+        f_score = tp/(tp + (1/2)*(fn+fp))
+        f_score = '{:.3f}'.format(f_score)
+
+        auc = (fp_rate*tp_rate + (tp_rate+1)*(1-fp_rate))/2
+        auc = '{:.3f}'.format(auc)
+
+        ax.plot(fp_rate, tp_rate,
+                label=f'(size = {measure}, c = {n_clusters}, t = {dist_threshold}) AUC = {auc}, F1-measure = {f_score}', marker='o', markersize='3')
+
+    ax.set_xlabel('False positive rate')
+    ax.set_ylabel('True positive rate')
+
+    plt.legend()
+    plt.tight_layout()
+
+    filename = get_project_results_dir().joinpath(
+        dataset_name + '_mass.eps')
+
+    return fig, str(filename)
+
+
 def produce_report(parameters_dict):
-    fig, filename = plot_hq_summary(parameters_dict)
-    pu.save_fig(fig, filename)
-    fig, filename = plot_hq_summary_p(parameters_dict)
-    pu.save_fig(fig, filename)
     fig, filename = plot_hq_mtx(parameters_dict)
+    pu.save_fig(fig, filename)
+    fig, filename = plot_massive(parameters_dict)
     pu.save_fig(fig, filename)
     plt.show()
