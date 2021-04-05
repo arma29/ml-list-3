@@ -19,6 +19,7 @@ class KMeansBayes(BaseEstimator, ClassifierMixin):
         self.__mean_dict = {}
         self.__std_dict = {}
         self.bayes_threshold = 0
+        self.__exc_set = set([])
 
     def fit(self, X, y, X_un=None):
         self.__is_fitted = True
@@ -75,6 +76,10 @@ class KMeansBayes(BaseEstimator, ClassifierMixin):
                        for x in enumerate(self.__kmeans.labels_) if x[1] == i]
             my_dict[str(i)] = max([np.linalg.norm(x - center)
                                    for x in X[indexes]])
+            if(my_dict[str(i)] == 0):  # Remove key and add in a set
+                del my_dict[str(i)]
+                self.__exc_set.add(i)
+
         return my_dict
 
     def predict(self, X, X_un=None):
@@ -92,19 +97,21 @@ class KMeansBayes(BaseEstimator, ClassifierMixin):
                 predict_lst.append(self.__pos_class)
             else:
                 predict_lst.append(self.__neg_class)
-            
+
         return np.array(predict_lst)
 
     def __compute_kmeans_ratio(self, x):
-        # Pegar o centro mais próximo (a label)
-        distances = [np.linalg.norm(x - center)
-                     for center in self.__kmeans.cluster_centers_]
-        label = np.argmin(distances)
-        dist_from_center = min(distances)
+        # Pegar o centro mais próximo (a label) de um grupo não vazio
+        cc = self.__kmeans.cluster_centers_
+        distances = [(np.linalg.norm(x - cc[i]), i)
+                     for i in range(len(cc))
+                     if i not in self.__exc_set]
+
+        best = sorted(distances, key=lambda x: x[0])[0]
+        label = best[1]
+        dist_from_center = best[0]
 
         max_dist = self.__dist_dict[str(label)]
-        if(max_dist == 0):
-            max_dist = 1e-8
 
         return dist_from_center / max_dist
 

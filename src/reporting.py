@@ -54,7 +54,7 @@ def plot_massive(parameters_dict):
 
     pu.figure_setup()
 
-    fig_size = pu.get_fig_size(15, 15)
+    fig_size = pu.get_fig_size(12, 9)
     fig = plt.figure(figsize=(fig_size))
     fig.suptitle(f'Dataset: {dataset_name.upper()}')
 
@@ -100,7 +100,7 @@ def plot_massive(parameters_dict):
         auc = '{:.3f}'.format(auc)
 
         ax.plot(fp_rate, tp_rate,
-                label=f'(size = {measure}, c = {n_clusters}, t = {dist_threshold}) AUC = {auc}, F1-measure = {f_score}', marker='o', markersize='3')
+                label=f'(size = {measure}, k = {n_clusters}, t = {dist_threshold}) AUC = {auc}, F1-measure = {f_score}', marker='o', markersize='3')
 
     ax.set_xlabel('False positive rate')
     ax.set_ylabel('True positive rate')
