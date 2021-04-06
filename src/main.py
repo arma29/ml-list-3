@@ -1,7 +1,8 @@
-import src.processing as processing
-import src.training as training
-import src.reporting as reporting
 import time
+
+import src.processing as processing
+import src.reporting as reporting
+import src.training as training
 import src.utils as utils
 
 
@@ -12,7 +13,7 @@ def main():
     names_lst = processing.get_data_names()
 
     for idx in range(len(raw_lst)):
-    # for idx in range(1):
+    # for idx in range(1,2):
         data_dict = processing.process_data(raw_lst[idx])
         data_dict['dataset_name'] = names_lst[idx]
         model_dict = training.train_model(data_dict)

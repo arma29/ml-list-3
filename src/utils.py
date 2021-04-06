@@ -1,6 +1,5 @@
-from pathlib import Path
 import datetime
-import time
+from pathlib import Path
 
 
 def get_project_root() -> Path:

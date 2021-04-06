@@ -1,9 +1,8 @@
-from sklearn.base import BaseEstimator, ClassifierMixin
-import numpy as np
-
-from sklearn.cluster import KMeans
-
 import math
+
+import numpy as np
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.cluster import KMeans
 
 
 class KMeansBayes(BaseEstimator, ClassifierMixin):
@@ -21,53 +20,43 @@ class KMeansBayes(BaseEstimator, ClassifierMixin):
         self.bayes_threshold = 0
         self.__exc_set = set([])
 
-    def fit(self, X, y, X_un=None):
+    def fit(self, X, y):
         self.__is_fitted = True
         self.__kmeans = KMeans(
             n_clusters=self.n_clusters, random_state=1).fit(X)
 
         self.__dist_dict = self.__initialize_dist_dict(X)
 
-        if(X_un is None):
-            return self
-
-        self.__initialize_stats_dict(X_un)
-        self.bayes_threshold = self.__compute_bayes_threshold(X_un)
+        self.__initialize_stats_dict(X)
+        self.bayes_threshold = self.__compute_bayes_threshold(X)
 
         return self
 
-    def __initialize_stats_dict(self, X_un):
+    def __initialize_stats_dict(self, X):
         # Pré computar medias e stds de cada att
-        for i in range(X_un.shape[1]):
-            column = X_un[:, i]
+        for i in range(X.shape[1]):
+            column = X[:, i]
             self.__mean_dict[str(i)] = np.mean(column)
             self.__std_dict[str(i)] = np.std(column)
 
-    def __compute_bayes_threshold(self, X_un):
-
-        arr = [self.__compute_bayes_individual(x) for x in X_un]
+    def __compute_bayes_threshold(self, X):
+        arr = [self.__compute_bayes_individual(x) for x in X]
         return min(arr)
 
     def __compute_bayes_individual(self, x):
         # Para cada atributo do exemplo
-        probs = 1
+        curr_prob = 1
         for i, att in enumerate(x):
             # Calcular a probabilidade do valor supondo uma gaussiana
             mean = self.__mean_dict[str(i)]
             std = self.__std_dict[str(i)]
 
-            if(std == 0):
-                custom_prob = 1
-            else:
-                # pdf = norm(loc=self.__mean_dict[str(i)],
-                #            scale=self.__std_dict[str(i)]).pdf(att)
+            if(std != 0):
                 fst_term = (1/(math.sqrt(2*math.pi*(std**2))))
                 snd_term = math.exp(-(((att - mean)**2)/(2*(std**2))))
-                custom_prob = fst_term * snd_term
+                curr_prob *= (fst_term * snd_term)
 
-            probs *= custom_prob
-
-        return probs
+        return curr_prob
 
     def __initialize_dist_dict(self, X):
         my_dict = {}
@@ -82,18 +71,19 @@ class KMeansBayes(BaseEstimator, ClassifierMixin):
 
         return my_dict
 
-    def predict(self, X, X_un=None):
+    def predict(self, X):
         if(not self.__is_fitted):
             raise Exception('Not fitted')
 
         predict_lst = []
 
         # Para cada dado de teste (Normalizado e Não-normalizado)
-        for x in zip(X, X_un):
-            dist_ratio = self.__compute_kmeans_ratio(x[0])
-            curr_prob = self.__compute_bayes_individual(x[1])
+        for x in X:
+            dist_ratio = self.__compute_kmeans_ratio(x)
+            curr_prob = self.__compute_bayes_individual(x)
 
-            if(dist_ratio > self.dist_threshold or curr_prob < self.bayes_threshold):  # Outlier
+            if(dist_ratio > self.dist_threshold
+               or curr_prob < self.bayes_threshold):  # Outlier
                 predict_lst.append(self.__pos_class)
             else:
                 predict_lst.append(self.__neg_class)
@@ -115,8 +105,8 @@ class KMeansBayes(BaseEstimator, ClassifierMixin):
 
         return dist_from_center / max_dist
 
-    def score(self, X, y, X_un=None):
-        return self.__accuracy_score(y, np.array(self.predict(X, X_un)))
+    def score(self, X, y):
+        return self.__accuracy_score(y, np.array(self.predict(X)))
 
     def __accuracy_score(self, y_true, y_pred):
         if(len(y_true) != len(y_pred)):
@@ -124,6 +114,8 @@ class KMeansBayes(BaseEstimator, ClassifierMixin):
         hits = [True for (a, b) in zip(y_true, y_pred) if a == b]
         return len(hits)/len(y_true)
 
-    def predict_proba(self, X, X_un=None):
-        predict_lst = self.predict(X, X_un)
-        return np.array([[1, 0] if x == self.__neg_class else [0, 1] for x in predict_lst])
+    def predict_proba(self, X):
+        predict_lst = self.predict(X)
+        return np.array([[1, 0]
+                         if x == self.__neg_class
+                         else [0, 1] for x in predict_lst])

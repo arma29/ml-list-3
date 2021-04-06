@@ -25,12 +25,11 @@ def plot_hq_mtx(parameters_dict):
         title = f'{curr_name*100}\%'
 
         X_test = parameters_dict['classifier'][str(curr_name)]['X_test']
-        X_test_n = parameters_dict['classifier'][str(curr_name)]['X_test_n']
         y_test = parameters_dict['classifier'][str(curr_name)]['y_test']
 
         classifier = parameters_dict['classifier'][str(curr_name)]['obj']
 
-        cf_mtx = confusion_matrix(y_test, classifier.predict(X_test_n, X_test))
+        cf_mtx = confusion_matrix(y_test, classifier.predict(X_test))
         tn, fp, fn, tp = cf_mtx.ravel()
         print(f'Title:{title} - TN:{tn} FP:{fp} FN:{fn} TP:{tp}\n')
 
@@ -66,13 +65,10 @@ def plot_massive(parameters_dict):
 
     for measure in measures_lst:
         X_test = parameters_dict['classifier'][str(measure)]['X_test']
-        X_test_n = parameters_dict['classifier'][str(measure)]['X_test_n']
         y_test = parameters_dict['classifier'][str(measure)]['y_test']
 
         X_neg_train = parameters_dict['classifier'][str(
             measure)]['X_neg_train']
-        X_neg_train_n = parameters_dict['classifier'][str(
-            measure)]['X_neg_train_n']
         y_neg_train = parameters_dict['classifier'][str(
             measure)]['y_neg_train']
 
@@ -85,10 +81,10 @@ def plot_massive(parameters_dict):
             pos_class=target_names[1],
             n_clusters=n_clusters,
             dist_threshold=dist_threshold
-        ).fit(X_neg_train_n, y_neg_train, X_neg_train)
+        ).fit(X_neg_train, y_neg_train)
 
         tn, fp, fn, tp = confusion_matrix(
-            y_test, classifier.predict(X_test_n, X_test)).ravel()
+            y_test, classifier.predict(X_test)).ravel()
 
         tp_rate = tp/(tp+fn)
         fp_rate = fp/(fp+tn)
